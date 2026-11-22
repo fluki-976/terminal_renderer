@@ -118,7 +118,7 @@ impl Grid {
     pub fn clear(&mut self) {
         self.cells.fill(cell::Cell::default());
         if self.border.enable {
-            self.draw_border();
+            self.draw_border(self.border.chars);
         }
     }
 
@@ -152,7 +152,11 @@ impl Grid {
         }
 
         self.border.enable = enable;
-        self.draw_border();
+        if enable {
+            self.draw_border(self.border.chars);
+        } else {
+            self.draw_border(BorderChars::BLANK);
+        }
         Ok(())
     }
 
@@ -258,29 +262,26 @@ impl Grid {
 
     /// Writes the border chars into the outer ring of cells, or blanks the
     /// ring when the border is off
-    fn draw_border(&mut self) {
-        let chars = if self.border.enable {
-            self.border.chars
-        } else {
-            BorderChars::BLANK
-        };
+    fn draw_border(&mut self, chars: BorderChars) {
+        let (width, height) = (self.width, self.height);
+        /* Closure for direct x,y cell access */
+        let mut set = |row: usize, col: usize, ch: char| self.cells[row * width + col].char = ch;
 
-        let num_of_cells = self.cells.len();
-
-        /* Place top/bottom/sides */
-        for (idx, cell) in self.cells.iter_mut().enumerate() {
-            if idx < self.width || idx > num_of_cells - self.width {
-                cell.char = chars.horizontal;
-            } else if idx % self.width == 0 || idx % self.width == self.width - 1{
-                cell.char = chars.vertical;
-            }
-
+        /* Top and bottom edges */
+        for col in 1..width - 1 {
+            set(0, col, chars.horizontal);
+            set(height - 1, col, chars.horizontal);
         }
-        /* Place Corners */
-        self.cells[0].char = chars.top_left;
-        self.cells[self.width - 1].char = chars.top_right;
-        self.cells[num_of_cells - self.width].char = chars.bottom_left;
-        self.cells[num_of_cells-1].char = chars.bottom_right;
+        /* Left and right edges */
+        for row in 1..height - 1 {
+            set(row, 0, chars.vertical);
+            set(row, width - 1, chars.vertical);
+        }
+        /* Corners */
+        set(0, 0, chars.top_left);
+        set(0, width - 1, chars.top_right);
+        set(height - 1, 0, chars.bottom_left);
+        set(height - 1, width - 1, chars.bottom_right);
     }
 
     /**********************************************************
@@ -348,7 +349,7 @@ mod tests {
     #[test]
     fn border_drawn_in_outer_grid_cells() {
         let mut grid = grid_with_border(0, 0, 10, 6);
-        grid.draw_border();
+        grid.draw_border(grid.border.chars);
         let rows: Vec<String> = (0..6).map(|i| grid.row_text(i)).collect();
         assert_eq!(rows[0], "┌────────┐");
         assert_eq!(rows[1], "│        │");
@@ -364,7 +365,6 @@ mod tests {
         let result = grid.set_border(false);
         assert!(result.is_ok(), "{result:?}");
 
-        grid.draw_border();
         let rows: Vec<String> = (0..6).map(|i| grid.row_text(i)).collect();
         assert_eq!(rows, ["", "", "", "", "", ""]);
     }
@@ -373,7 +373,7 @@ mod tests {
     fn first_row_with_border_hits_inside_border() {
         let mut grid = grid_with_border(0, 0, 10, 6);
         grid.write_cells(&cell::cells_from("Hello"), 0, 0);
-        grid.draw_border();
+        grid.draw_border(grid.border.chars);
         let rows: Vec<String> = (0..6).map(|i| grid.row_text(i)).collect();
         assert_eq!(rows[0], "┌────────┐");
         assert_eq!(rows[1], "│Hello   │");
@@ -386,7 +386,7 @@ mod tests {
     #[test]
     fn border_remains_after_clear() {
         let mut grid = grid_with_border(0, 0, 10, 6);
-        grid.draw_border();
+        grid.draw_border(grid.border.chars);
         grid.clear();
         let rows: Vec<String> = (0..6).map(|i| grid.row_text(i)).collect();
         assert_eq!(rows[0], "┌────────┐");

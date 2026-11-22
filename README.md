@@ -86,16 +86,16 @@ cargo test
 - [ ] Test that a shorter line leaves no tail of the longer line it replaces
 
 **Rendering**
-- [ ] Draw blank cells as `' '`: a NUL cell does not overwrite old text on
+- [x] Draw blank cells as `' '`: a NUL cell does not overwrite old text on
       the real screen
 - [ ] Render `Style` (colour, bold, underline), grouping cells that share a
       style into one escape sequence
 - [ ] Redraw on terminal resize
 - [ ] Optional pane borders, drawn with Unicode box characters (`┌─┐│└┘`)
-      and an optional title in the top edge
-  - [ ] `Grid::set_border(title)`: the grid keeps its outer size but
+  - [x] `Grid::set_border(enable)`: the grid keeps its outer size but
         `get_grid_size`, `write_cells` and `clear` work on the inside only,
         so panes need no changes
+  - [ ] Optional title in the top edge of the border
   - [ ] Settable border colour
   - [ ] Show focus on the border (double line `╔═╗║` or a focus colour)
 
@@ -113,7 +113,7 @@ cargo test
 - [ ] Decide how errors are reported (`push_line` still uses `unwrap`)
 
 **Tidy**
-- [ ] Remove the deprecated `std::usize` import in `pane.rs`
-- [ ] Remove the empty test module in `grid.rs` and the unused
-      `helper_print_screen_dims` in `screen.rs`
+- [ ] Remove the deprecated `std::usize` import in `pane.rs` and `grid.rs`
+- [x] Fill the empty test module in `grid.rs`
+- [ ] Remove the unused `helper_print_screen_dims` in `screen.rs`
 - [x] Decide whether `LogHistory` needs to be public: crate-private
