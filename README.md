@@ -116,4 +116,4 @@ cargo test
 - [ ] Remove the deprecated `std::usize` import in `pane.rs`
 - [ ] Remove the empty test module in `grid.rs` and the unused
       `helper_print_screen_dims` in `screen.rs`
-- [ ] Decide whether `LogHistory` needs to be public
+- [x] Decide whether `LogHistory` needs to be public: crate-private

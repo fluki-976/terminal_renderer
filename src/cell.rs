@@ -35,6 +35,12 @@ impl Default for Cell {
     fn default() -> Self {
         Cell { style: Style::default(), char: ' ' }
     }
-    
+
+}
+
+/// Cells for `text` in the default style, for building lines in tests
+#[cfg(test)]
+pub(crate) fn cells_from(text: &str) -> Vec<Cell> {
+    text.chars().map(|char| Cell { char, ..Default::default() }).collect()
 }
 

@@ -17,11 +17,51 @@ use crate::cell;
  * Vertical     │  '\u{2502}'
  */
 
+/// Characters that make up a border
+#[derive(Clone, Copy)]
+struct BorderChars {
+    top_left: char,
+    top_right: char,
+    bottom_left: char,
+    bottom_right: char,
+    horizontal: char,
+    vertical: char,
+}
+
+impl BorderChars {
+    /// Single line box drawing
+    const SINGLE: Self = Self {
+        top_left: '┌',
+        top_right: '┐',
+        bottom_left: '└',
+        bottom_right: '┘',
+        horizontal: '─',
+        vertical: '│',
+    };
+
+    /// Blank cells, matching `Cell::default`, used to remove a border
+    const BLANK: Self = Self {
+        top_left: ' ',
+        top_right: ' ',
+        bottom_left: ' ',
+        bottom_right: ' ',
+        horizontal: ' ',
+        vertical: ' ',
+    };
+}
+
+impl Default for BorderChars {
+    fn default() -> Self {
+        Self::SINGLE
+    }
+}
+
 #[derive(Default)]
 struct Border {
     enable: bool,
-    width: usize,
     style: cell::Style,
+    /// Drawn when the border is on
+    chars: BorderChars,
 }
 
 /*****************************************************************************/
@@ -77,6 +117,9 @@ impl Grid {
      **********************************************************/
     pub fn clear(&mut self) {
         self.cells.fill(cell::Cell::default());
+        if self.border.enable {
+            self.draw_border();
+        }
     }
 
     pub fn fill_grid(&mut self, input: char) {
@@ -90,16 +133,14 @@ impl Grid {
     /// The border takes the outer ring of cells, leaving the inside for
     /// content
     ///
+    /// Does nothing if the border is already in the requested state
+    ///
     /// # Errors
-    /// * `InvalidInput` if the border is already on
-    /// * `InvalidInput` if the grid is smaller than 3x3, leaving no room inside
+    /// `InvalidInput` if the grid is smaller than 3x3, leaving no room inside
     pub fn set_border(&mut self, enable: bool) -> io::Result<()> {
-        /* Border already on */
-        if self.border.enable && enable {
-            return Err(Error::new(
-                ErrorKind::InvalidInput,
-                format!("Border already in expected {} state", enable),
-            ));
+        /* Nothing to draw or clear */
+        if self.border.enable == enable {
+            return Ok(());
         }
 
         /* A border needs at least one cell inside it */
@@ -111,52 +152,48 @@ impl Grid {
         }
 
         self.border.enable = enable;
+        self.draw_border();
         Ok(())
     }
 
     /**********************************************************
      *                        Crate                           *
      **********************************************************/
-    /// Copies `line` into the grid, starting at the given row and column.
+    /// Copies `line` into the inside of the grid, starting at the given row
+    /// and column
     ///
-    /// Cells past the right edge are cut off, not wrapped. An offset outside
-    /// the grid prints an error to stdout and writes nothing.
+    /// Positions are inside the border when one is set, so row 0, column 0
+    /// is the first cell within it. Cells past the inner right edge are cut
+    /// off, not wrapped. An offset outside the inside prints an error to
+    /// stdout and writes nothing
     ///
     /// # Arguments
-    /// * `line` - Cells to copy, left to right.
-    /// * `line_offset` - Row to write, 0-based from the top of the grid.
+    /// * `line` - Cells to copy, left to right
+    /// * `line_offset` - Row to write, 0-based from the top of the inside
     /// * `char_offset` - Column of the first cell, 0-based from the left of
-    ///   the grid.
+    ///   the inside
     pub(crate) fn write_cells(
         &mut self,
-        line: &Vec<cell::Cell>,
+        line: &[cell::Cell],
         line_offset: usize,
         char_offset: usize,
     ) {
-        if char_offset >= self.width {
+        /* Use adjusted width & height to account for optional border */
+        let (height, width) = self.get_grid_size();
+        if line_offset >= height || char_offset >= width {
             println!(
-                "Char offset invalid: {} (col < {})",
-                char_offset, self.width
-            );
-            return;
-        } else if line_offset >= self.height {
-            println!(
-                "Line offset invalid: {} (row < {}",
-                line_offset, self.height
+                "Offset invalid: row {line_offset}, col {char_offset} (inside is {height}x{width})"
             );
             return;
         }
 
-        let cell_offset: usize = (line_offset as usize) * self.width + char_offset;
+        /* Inner row and column to an index in the outer cells */
+        let inset = self.inset();
+        let start = (line_offset + inset) * self.width + char_offset + inset;
 
-        // TODO Could be converted to a memcpy like transfer
-        for (i, ch) in line.iter().enumerate() {
-            /* Loc in current line + length >= grid width  */
-            if (cell_offset % self.width as usize) + i >= (self.width as usize) {
-                break; // TODO: Implement line wrapping
-            }
-            self.cells[cell_offset + i] = ch.clone();
-        }
+        /* Cut off at the inner right edge. TODO: line wrapping */
+        let len = line.len().min(width - char_offset);
+        self.cells[start..start + len].copy_from_slice(&line[..len]);
     }
 
     /// Returns the escape string that redraws only the cells changed since
@@ -205,12 +242,46 @@ impl Grid {
     }
 
     pub(crate) fn get_grid_size(&self) -> (usize, usize) {
-        (self.height, self.width)
+        (
+            self.height - 2 * self.inset(),
+            self.width - 2 * self.inset(),
+        )
     }
 
     /**********************************************************
      *                       Private                          *
      **********************************************************/
+    /// Accounts for border width
+    fn inset(&self) -> usize {
+        usize::from(self.border.enable)
+    }
+
+    /// Writes the border chars into the outer ring of cells, or blanks the
+    /// ring when the border is off
+    fn draw_border(&mut self) {
+        let chars = if self.border.enable {
+            self.border.chars
+        } else {
+            BorderChars::BLANK
+        };
+
+        let num_of_cells = self.cells.len();
+
+        /* Place top/bottom/sides */
+        for (idx, cell) in self.cells.iter_mut().enumerate() {
+            if idx < self.width || idx > num_of_cells - self.width {
+                cell.char = chars.horizontal;
+            } else if idx % self.width == 0 || idx % self.width == self.width - 1{
+                cell.char = chars.vertical;
+            }
+
+        }
+        /* Place Corners */
+        self.cells[0].char = chars.top_left;
+        self.cells[self.width - 1].char = chars.top_right;
+        self.cells[num_of_cells - self.width].char = chars.bottom_left;
+        self.cells[num_of_cells-1].char = chars.bottom_right;
+    }
 
     /**********************************************************
      *                       Helper                           *
@@ -231,7 +302,12 @@ impl Grid {
             .iter()
             .map(|cell| cell.char)
             .collect();
-        text.trim_end_matches('\0').to_string()
+        text.trim_end_matches(' ').to_string()
+    }
+    /// Text of every row top to bottom, border rows included
+    #[cfg(test)]
+    pub(crate) fn rows_text(&self) -> Vec<String> {
+        (0..self.height).map(|row| self.row_text(row)).collect()
     }
     #[cfg(test)]
     pub(crate) fn border_enabled(&self) -> bool {
@@ -256,12 +332,68 @@ mod tests {
         let result_a = grid.set_border(true);
         let result_b = grid.set_border(true);
 
-        /* Only allow border to be enabled once */
+        /* Second enable does nothing */
         assert!(result_a.is_ok(), "{result_a:?}");
-        assert!(result_b.is_err(), "{result_b:?}");
+        assert!(result_b.is_ok(), "{result_b:?}");
         assert!(grid.border_enabled());
     }
 
+    fn grid_with_border(x: usize, y: usize, width: usize, height: usize) -> Grid {
+        let mut grid = Grid::new(x, y, width, height).unwrap();
+        let result = grid.set_border(true);
+        assert!(result.is_ok(), "{result:?}");
+        grid
+    }
+
     #[test]
-    fn border_drawn_in_outer_grid_cells() {}
+    fn border_drawn_in_outer_grid_cells() {
+        let mut grid = grid_with_border(0, 0, 10, 6);
+        grid.draw_border();
+        let rows: Vec<String> = (0..6).map(|i| grid.row_text(i)).collect();
+        assert_eq!(rows[0], "┌────────┐");
+        assert_eq!(rows[1], "│        │");
+        assert_eq!(rows[2], "│        │");
+        assert_eq!(rows[3], "│        │");
+        assert_eq!(rows[4], "│        │");
+        assert_eq!(rows[5], "└────────┘");
+    }
+
+    #[test]
+    fn border_cleared_when_unset() {
+        let mut grid = grid_with_border(0, 0, 10, 6);
+        let result = grid.set_border(false);
+        assert!(result.is_ok(), "{result:?}");
+
+        grid.draw_border();
+        let rows: Vec<String> = (0..6).map(|i| grid.row_text(i)).collect();
+        assert_eq!(rows, ["", "", "", "", "", ""]);
+    }
+
+    #[test]
+    fn first_row_with_border_hits_inside_border() {
+        let mut grid = grid_with_border(0, 0, 10, 6);
+        grid.write_cells(&cell::cells_from("Hello"), 0, 0);
+        grid.draw_border();
+        let rows: Vec<String> = (0..6).map(|i| grid.row_text(i)).collect();
+        assert_eq!(rows[0], "┌────────┐");
+        assert_eq!(rows[1], "│Hello   │");
+        assert_eq!(rows[2], "│        │");
+        assert_eq!(rows[3], "│        │");
+        assert_eq!(rows[4], "│        │");
+        assert_eq!(rows[5], "└────────┘");
+    }
+
+    #[test]
+    fn border_remains_after_clear() {
+        let mut grid = grid_with_border(0, 0, 10, 6);
+        grid.draw_border();
+        grid.clear();
+        let rows: Vec<String> = (0..6).map(|i| grid.row_text(i)).collect();
+        assert_eq!(rows[0], "┌────────┐");
+        assert_eq!(rows[1], "│        │");
+        assert_eq!(rows[2], "│        │");
+        assert_eq!(rows[3], "│        │");
+        assert_eq!(rows[4], "│        │");
+        assert_eq!(rows[5], "└────────┘");
+    }
 }

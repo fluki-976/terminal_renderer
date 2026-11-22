@@ -26,34 +26,38 @@ use std::{
 use terminal_renderer as tr;
 
 fn main() -> io::Result<()> {
+    /* Create and initialize new screen */
     let mut display = match tr::Screen::new() {
         Ok(disp) => disp,
         Err(e) => return Err(e),
     };
     display.setup_screen()?;
 
-
-    
+    /* Create panes to create seperate sections on the screen to draw on */
     let grid_pane = display.add_pane(tr::Grid::new(0, display.rows-1, display.columns, 1)?);
-    display.pane(grid_pane).fill_grid('1');
-    
-
     let log_pane = display.add_pane(tr::LogPane::new(0, 0, display.columns, display.rows-1)?);
 
+    /* Styling panes with options */
+    display.pane(log_pane).set_border(true)?;
+    
+    /* Writing to the panes */
+    display.pane(grid_pane).fill_grid('1');
     for i in 0..100 {
         display.pane(log_pane).push_line(&format!("Line: {}",i));
     }
 
+    /* Draw everything buffered to the screen */
     display.draw()?;
 
-    thread::sleep(time::Duration::from_secs(3));
 
+    /* Simulating Rolling log for scroll tests */
     for i in 101..200 {
         display.pane(log_pane).push_line(&format!("Line: {}",i));
         thread::sleep(time::Duration::from_secs(1));
         display.draw()?;
     }
 
+    /* Cleanup and hand back screen to user */
     display.teardown()?;
     Ok(())
 }

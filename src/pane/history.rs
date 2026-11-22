@@ -9,18 +9,18 @@ use crate::{Style, cell};
 /*****************************************************************************/
 pub struct LogPane {
     /// Every line received so far, up to the log limit, and the scroll
-    /// position.
+    /// position
     log: LogHistory,
     /// Frame that the visible part of `log` is copied into before each
-    /// draw.
+    /// draw
     grid: Grid,
 }
 
 impl Pane for LogPane {
-    /// Copies the visible lines from log into the grid and returns it.
+    /// Copies the visible lines from log into the grid and returns it
     ///
     /// Shows the `height` lines that end `scroll` lines back from the newest.
-    /// Lines wider than the grid are cut off, not wrapped.
+    /// Lines wider than the grid are cut off, not wrapped
     fn frame(&mut self) -> &mut Grid {
         let (height, _) = self.grid.get_grid_size();
 
@@ -53,26 +53,37 @@ impl LogPane {
         self.log.push_line(line);
     }
 
-    /// Moves the view `scroll_n_lines` towards older lines.
+    /// Turns the border around the pane on or off
     ///
-    /// Stops once the oldest line is on the top row. While scrolled, the
-    /// view stays on the same lines as new ones are pushed.
-    pub fn scroll_up(&mut self, scroll_n_lines: usize) {
-        self.log.set_scroll_offset(self.log.scroll.saturating_add(scroll_n_lines));
+    /// The scroll limit follows the rows left inside the border
+    pub fn set_border(&mut self, enable: bool) -> io::Result<()> {
+        self.grid.set_border(enable)?;
+        self.log.set_view_height(self.grid.get_grid_size().0);
+        Ok(())
     }
 
-    /// Moves the view `scroll_n_lines` towards newer lines.
+    /// Moves the view `scroll_n_lines` towards older lines
     ///
-    /// Stops at the newest line, where the view follows new lines again.
+    /// Stops once the oldest line is on the top row. While scrolled, the
+    /// view stays on the same lines as new ones are pushed
+    pub fn scroll_up(&mut self, scroll_n_lines: usize) {
+        self.log
+            .set_scroll_offset(self.log.scroll.saturating_add(scroll_n_lines));
+    }
+
+    /// Moves the view `scroll_n_lines` towards newer lines
+    ///
+    /// Stops at the newest line, where the view follows new lines again
     pub fn scroll_down(&mut self, scroll_n_lines: usize) {
-        self.log.set_scroll_offset(self.log.scroll.saturating_sub(scroll_n_lines));
+        self.log
+            .set_scroll_offset(self.log.scroll.saturating_sub(scroll_n_lines));
     }
 }
 
 /*****************************************************************************/
 /*                               LogHistory                                  */
 /*****************************************************************************/
-pub struct LogHistory {
+pub(crate) struct LogHistory {
     /// Received lines, oldest first, stored unwrapped
     lines: VecDeque<Vec<cell::Cell>>,
     /// How many lines are shown, used to clamp scroll to full grids
@@ -101,12 +112,12 @@ impl LogHistory {
         }
     }
 
-    /// Adds `line` to the log as a new line, in the default style.
+    /// Adds `line` to the log as a new line, in the default style
     ///
     /// Every `\n` starts a further line, including a trailing one, so
     /// `"one\n"` stores `"one"` and an empty line. Strip it first if that
-    /// is not wanted. `\r` is ignored. Once the current line is longer than
-    /// `max_line_len`, characters on that line are dropped
+    /// is not wanted. `\r` is ignored. Once the current line holds
+    /// `max_line_len` characters, the rest of that line is dropped
     pub(crate) fn push_line(&mut self, line: &str) {
         /* Each push starts its own line */
         self.new_line();
@@ -144,7 +155,7 @@ impl LogHistory {
     fn new_line(&mut self) {
         self.lines.push_back(Vec::new());
         self.trim_line_history();
-        
+
         /* Don`t shift text on screen if at scroll offset */
         if self.scroll > 0 {
             self.set_scroll_offset(self.scroll + 1);
@@ -157,6 +168,13 @@ impl LogHistory {
             /* Scroll counts from the newest line, so this leaves it unchanged */
             self.lines.pop_front();
         }
+    }
+
+    /// Sets how many lines are shown, pulling scroll back inside the new
+    /// limit when the view grows
+    fn set_view_height(&mut self, view_height: usize) {
+        self.view_height = view_height;
+        self.set_scroll_offset(self.scroll);
     }
 
     /// Furthest scroll that still fills the view: `view_height` lines short
@@ -197,13 +215,6 @@ mod tests {
         log
     }
 
-    /// Cells for `text` in the default style, for building lines directly
-    fn line(text: &str) -> Vec<cell::Cell> {
-        text.chars()
-            .map(|c| cell::Cell { char: c, style: Style::default() })
-            .collect()
-    }
-
     mod log_pane {
         use super::*;
 
@@ -216,12 +227,10 @@ mod tests {
             pane
         }
 
-        /// Text of each grid row, top to bottom
+        /// Text of each grid row, top to bottom, border rows included
         fn get_rows_from_grid(grid: &Grid) -> Vec<String> {
-            let (height, _) = grid.get_grid_size();
-            (0..height).map(|row| grid.row_text(row)).collect()
+            grid.rows_text()
         }
-
 
         #[test]
         fn empty_history_draws_blank() {
@@ -255,8 +264,9 @@ mod tests {
             use super::*;
 
             /// More lines than the 4-row test pane, so there is room to scroll
-            const SEVEN_LINES: &[&str] =
-                &["First", "Second", "Third", "Fourth", "Fifth", "Sixth", "Seventh"];
+            const SEVEN_LINES: &[&str] = &[
+                "First", "Second", "Third", "Fourth", "Fifth", "Sixth", "Seventh",
+            ];
 
             #[test]
             fn scroll_up_shows_older_lines() {
@@ -309,10 +319,43 @@ mod tests {
 
                 assert_eq!(rows, ["Fourth", "Fifth", "Sixth", "Seventh"]);
             }
+
+            #[test]
+            fn border_off_while_scrolled_fills_pane() {
+                let mut log_pane = pane_with(6, SEVEN_LINES);
+                log_pane.set_border(true).unwrap();
+                log_pane.scroll_up(10);
+                log_pane.set_border(false).unwrap();
+
+                let rows = get_rows_from_grid(log_pane.frame());
+
+                /* Scroll pulled back so all 6 rows hold lines, none blank */
+                assert_eq!(rows, ["First", "Second", "Third", "Fourth", "Fifth", "Sixth"]);
+            }
+
+            #[test]
+            fn scroll_up_stops_with_oldest_line_at_top_of_border() {
+                let mut log_pane = pane_with(6, SEVEN_LINES);
+                log_pane.set_border(true).unwrap();
+                log_pane.scroll_up(10);
+
+                let rows = get_rows_from_grid(log_pane.frame());
+
+                /* 4 rows inside the border, filled by the 4 oldest lines */
+                assert_eq!(
+                    rows,
+                    [
+                        "┌────────┐",
+                        "│First   │",
+                        "│Second  │",
+                        "│Third   │",
+                        "│Fourth  │",
+                        "└────────┘"
+                    ]
+                );
+            }
         }
     }
-
-
 
     mod log_history {
         use super::*;
@@ -365,7 +408,6 @@ mod tests {
                 assert_eq!(log.scroll, log.max_lines);
             }
         }
-        
 
         mod trim_line_history {
             use super::*;
@@ -374,7 +416,7 @@ mod tests {
             fn remove_oldest_line_on_overflow() {
                 let mut log = log_with_lines(LogHistory::new(NO_VIEW_LIMIT).max_lines);
                 /* One over max, bypassing push_line so only the trim runs */
-                log.lines.push_back(line("NEW"));
+                log.lines.push_back(cell::cells_from("NEW"));
 
                 log.trim_line_history();
 
@@ -388,7 +430,7 @@ mod tests {
             fn scroll_unchanged_when_oldest_dropped() {
                 let mut log = log_with_lines(LogHistory::new(NO_VIEW_LIMIT).max_lines);
                 log.set_scroll_offset(3);
-                log.lines.push_back(line("NEW"));
+                log.lines.push_back(cell::cells_from("NEW"));
 
                 log.trim_line_history();
 
@@ -430,6 +472,17 @@ mod tests {
             }
 
             #[test]
+            fn taller_view_pulls_scroll_back_inside_limit() {
+                let mut log = log_in_view(4, 10);
+                log.set_scroll_offset(6);
+
+                log.set_view_height(8);
+
+                /* 10 lines with 8 on screen leaves only 2 to scroll back through */
+                assert_eq!(log.scroll, 2);
+            }
+
+            #[test]
             fn zero_scroll_when_lines_fit_view() {
                 let log = log_in_view(4, 2);
 
@@ -439,7 +492,7 @@ mod tests {
         }
 
         mod set_scroll_offset {
-            use super::*; 
+            use super::*;
 
             #[test]
             fn setting_scroll_offset() {

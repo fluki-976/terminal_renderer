@@ -8,7 +8,7 @@ use std::marker::PhantomData;
 use crate::Grid;
 
 mod history;
-pub use history::{LogPane, LogHistory};
+pub use history::LogPane;
 
 
 /*****************************************************************************/
