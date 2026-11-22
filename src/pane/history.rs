@@ -16,31 +16,6 @@ pub struct LogPane {
     grid: Grid,
 }
 
-impl Pane for LogPane {
-    /// Copies the visible lines from log into the grid and returns it
-    ///
-    /// Shows the `height` lines that end `scroll` lines back from the newest.
-    /// Lines wider than the grid are cut off, not wrapped
-    fn frame(&mut self) -> &mut Grid {
-        let (height, _) = self.grid.get_grid_size();
-
-        self.grid.clear();
-
-        /* Takes from the latest lines, starting from the back */
-        let visible = self
-            .log
-            .lines
-            .iter()
-            .rev()
-            .skip(self.log.scroll)
-            .take(height);
-        for (row, line) in visible.enumerate() {
-            self.grid.write_cells(line, height - 1 - row, 0);
-        }
-        &mut self.grid
-    }
-}
-
 impl LogPane {
     pub fn new(x: usize, y: usize, width: usize, height: usize) -> io::Result<Self> {
         Ok(LogPane {
@@ -77,6 +52,31 @@ impl LogPane {
     pub fn scroll_down(&mut self, scroll_n_lines: usize) {
         self.log
             .set_scroll_offset(self.log.scroll.saturating_sub(scroll_n_lines));
+    }
+}
+
+impl Pane for LogPane {
+    /// Copies the visible lines from log into the grid and returns it
+    ///
+    /// Shows the `height` lines that end `scroll` lines back from the newest.
+    /// Lines wider than the grid are cut off, not wrapped
+    fn frame(&mut self) -> &mut Grid {
+        let (height, _) = self.grid.get_grid_size();
+
+        self.grid.clear();
+
+        /* Takes from the latest lines, starting from the back */
+        let visible = self
+            .log
+            .lines
+            .iter()
+            .rev()
+            .skip(self.log.scroll)
+            .take(height);
+        for (row, line) in visible.enumerate() {
+            self.grid.write_cells(line, height - 1 - row, 0);
+        }
+        &mut self.grid
     }
 }
 
@@ -142,10 +142,6 @@ impl LogHistory {
     }
 
     /**********************************************************
-     *                        Crate                           *
-     **********************************************************/
-
-    /**********************************************************
      *                       Private                          *
      **********************************************************/
     /// Adds new line to write to
@@ -177,43 +173,22 @@ impl LogHistory {
         self.set_scroll_offset(self.scroll);
     }
 
-    /// Furthest scroll that still fills the view: `view_height` lines short
-    /// of the line count
-    fn max_scroll(&self) -> usize {
-        self.lines.len().saturating_sub(self.view_height)
-    }
-
     /// Sets how many lines back from the newest the view ends, limited to
     /// [`max_scroll`](Self::max_scroll)
     fn set_scroll_offset(&mut self, scroll_offset: usize) {
         self.scroll = scroll_offset.min(self.max_scroll());
+    }
+
+    /// Furthest scroll that still fills the view: `view_height` lines short
+    /// of the line count
+    fn max_scroll(&self) -> usize {
+        self.lines.len().saturating_sub(self.view_height)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    /// View height for tests that use LogHistory without a pane. Scroll is
-    /// limited only by the line count, as if the view were 0 rows tall
-    const NO_VIEW_LIMIT: usize = 0;
-
-    /// Text of each stored line, so asserts compare plain strings
-    fn texts(log: &LogHistory) -> Vec<String> {
-        log.lines
-            .iter()
-            .map(|line| line.iter().map(|cell| cell.char).collect())
-            .collect()
-    }
-
-    /// Log holding the lines "0", "1", ... up to `n - 1`
-    fn log_with_lines(n: usize) -> LogHistory {
-        let mut log = LogHistory::new(NO_VIEW_LIMIT);
-        for i in 0..n {
-            log.push_line(&i.to_string());
-        }
-        log
-    }
 
     mod log_pane {
         use super::*;
@@ -330,7 +305,10 @@ mod tests {
                 let rows = get_rows_from_grid(log_pane.frame());
 
                 /* Scroll pulled back so all 6 rows hold lines, none blank */
-                assert_eq!(rows, ["First", "Second", "Third", "Fourth", "Fifth", "Sixth"]);
+                assert_eq!(
+                    rows,
+                    ["First", "Second", "Third", "Fourth", "Fifth", "Sixth"]
+                );
             }
 
             #[test]
@@ -360,11 +338,103 @@ mod tests {
     mod log_history {
         use super::*;
 
+        /// View height for tests that use LogHistory without a pane. Scroll is
+        /// limited only by the line count, as if the view were 0 rows tall
+        const NO_VIEW_LIMIT: usize = 0;
+
+        /// Text of each stored line, so asserts compare plain strings
+        fn texts(log: &LogHistory) -> Vec<String> {
+            log.lines
+                .iter()
+                .map(|line| line.iter().map(|cell| cell.char).collect())
+                .collect()
+        }
+
+        /// Log holding the lines "0", "1", ... up to `n - 1`
+        fn log_with_lines(n: usize) -> LogHistory {
+            let mut log = LogHistory::new(NO_VIEW_LIMIT);
+            for i in 0..n {
+                log.push_line(&i.to_string());
+            }
+            log
+        }
+
+        /// Log holding lines "0" to "num_of_lines - 1", shown in a view
+        /// `height` rows high
+        fn log_in_view(height: usize, num_of_lines: usize) -> LogHistory {
+            let mut log = LogHistory::new(height);
+            for i in 0..num_of_lines {
+                log.push_line(&i.to_string());
+            }
+            log
+        }
+
         #[test]
         fn new_log_is_empty_and_unscrolled() {
             let log = LogHistory::new(5);
             assert!(log.lines.is_empty());
             assert_eq!(log.scroll, 0);
+        }
+
+        mod push_line {
+            use super::*;
+
+            #[test]
+            fn push_empty_line_to_history() {
+                let mut log = LogHistory::new(NO_VIEW_LIMIT);
+                log.push_line("");
+                assert_eq!(texts(&log), [""]);
+            }
+
+            #[test]
+            fn each_push_is_its_own_line() {
+                let mut log = LogHistory::new(NO_VIEW_LIMIT);
+                log.push_line("one");
+                log.push_line("two");
+                assert_eq!(texts(&log), ["one", "two"]);
+            }
+
+            #[test]
+            fn new_line_code_puts_text_on_next_line() {
+                let mut log = LogHistory::new(NO_VIEW_LIMIT);
+                log.push_line("one\ntwo");
+                assert_eq!(texts(&log), ["one", "two"]);
+            }
+
+            #[test]
+            fn trailing_newline_adds_empty_line() {
+                let mut log = LogHistory::new(NO_VIEW_LIMIT);
+                log.push_line("one\n");
+                assert_eq!(texts(&log), ["one", ""]);
+            }
+
+            #[test]
+            fn overlong_line_cut_at_max_line_length() {
+                let mut log = LogHistory::new(NO_VIEW_LIMIT);
+
+                // S - Start, x - Filler, E - End, for identifying which end trimmed
+                let long_line = format!("S{}E", "x".repeat(log.max_line_len + 100));
+                log.push_line(&long_line);
+
+                let log_line = texts(&log).last().unwrap().clone();
+                assert_eq!(log_line.len(), log.max_line_len);
+                assert!(log_line.starts_with('S'));
+            }
+
+            #[test]
+            fn crlf_is_one_line_break() {
+                let mut log = LogHistory::new(NO_VIEW_LIMIT);
+                log.push_line("one\r\ntwo");
+                assert_eq!(texts(&log), ["one", "two"]);
+            }
+
+            #[test]
+            fn text_after_newline_survives_overlong_line() {
+                let mut log = LogHistory::new(NO_VIEW_LIMIT);
+                let long = "x".repeat(log.max_line_len + 10);
+                log.push_line(&format!("{long}\nnext"));
+                assert_eq!(texts(&log).last().unwrap(), "next");
+            }
         }
 
         mod new_line {
@@ -450,26 +520,8 @@ mod tests {
             }
         }
 
-        mod max_scroll {
+        mod set_view_height {
             use super::*;
-
-            /// Log holding lines "0" to "num_of_lines - 1", shown in a view
-            /// `height` rows high
-            fn log_in_view(height: usize, num_of_lines: usize) -> LogHistory {
-                let mut log = LogHistory::new(height);
-                for i in 0..num_of_lines {
-                    log.push_line(&i.to_string());
-                }
-                log
-            }
-
-            #[test]
-            fn leaves_view_height_of_lines_on_screen() {
-                let log = log_in_view(4, 10);
-
-                /* 10 lines with 4 on screen leaves 6 to scroll back through */
-                assert_eq!(log.max_scroll(), 6);
-            }
 
             #[test]
             fn taller_view_pulls_scroll_back_inside_limit() {
@@ -480,14 +532,6 @@ mod tests {
 
                 /* 10 lines with 8 on screen leaves only 2 to scroll back through */
                 assert_eq!(log.scroll, 2);
-            }
-
-            #[test]
-            fn zero_scroll_when_lines_fit_view() {
-                let log = log_in_view(4, 2);
-
-                /* 2 lines fit on 4 height screen so nothing to scroll through */
-                assert_eq!(log.max_scroll(), 0);
             }
         }
 
@@ -524,64 +568,23 @@ mod tests {
             }
         }
 
-        mod push_line {
+        mod max_scroll {
             use super::*;
 
             #[test]
-            fn push_empty_line_to_history() {
-                let mut log = LogHistory::new(NO_VIEW_LIMIT);
-                log.push_line("");
-                assert_eq!(texts(&log), [""]);
+            fn leaves_view_height_of_lines_on_screen() {
+                let log = log_in_view(4, 10);
+
+                /* 10 lines with 4 on screen leaves 6 to scroll back through */
+                assert_eq!(log.max_scroll(), 6);
             }
 
             #[test]
-            fn each_push_is_its_own_line() {
-                let mut log = LogHistory::new(NO_VIEW_LIMIT);
-                log.push_line("one");
-                log.push_line("two");
-                assert_eq!(texts(&log), ["one", "two"]);
-            }
+            fn zero_scroll_when_lines_fit_view() {
+                let log = log_in_view(4, 2);
 
-            #[test]
-            fn new_line_code_puts_text_on_next_line() {
-                let mut log = LogHistory::new(NO_VIEW_LIMIT);
-                log.push_line("one\ntwo");
-                assert_eq!(texts(&log), ["one", "two"]);
-            }
-
-            #[test]
-            fn trailing_newline_adds_empty_line() {
-                let mut log = LogHistory::new(NO_VIEW_LIMIT);
-                log.push_line("one\n");
-                assert_eq!(texts(&log), ["one", ""]);
-            }
-
-            #[test]
-            fn overlong_line_cut_at_max_line_length() {
-                let mut log = LogHistory::new(NO_VIEW_LIMIT);
-
-                // S - Start, x - Filler, E - End, for identifying which end trimmed
-                let long_line = format!("S{}E", "x".repeat(log.max_line_len + 100));
-                log.push_line(&long_line);
-
-                let log_line = texts(&log).last().unwrap().clone();
-                assert_eq!(log_line.len(), log.max_line_len);
-                assert!(log_line.starts_with('S'));
-            }
-
-            #[test]
-            fn crlf_is_one_line_break() {
-                let mut log = LogHistory::new(NO_VIEW_LIMIT);
-                log.push_line("one\r\ntwo");
-                assert_eq!(texts(&log), ["one", "two"]);
-            }
-
-            #[test]
-            fn text_after_newline_survives_overlong_line() {
-                let mut log = LogHistory::new(NO_VIEW_LIMIT);
-                let long = "x".repeat(log.max_line_len + 10);
-                log.push_line(&format!("{long}\nnext"));
-                assert_eq!(texts(&log).last().unwrap(), "next");
+                /* 2 lines fit on 4 height screen so nothing to scroll through */
+                assert_eq!(log.max_scroll(), 0);
             }
         }
     }
