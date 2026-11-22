@@ -25,9 +25,16 @@ pub struct Style {
 ///
 /// When rendering, group neighbouring cells that share a style so each style
 /// escape sequence is sent once per run, not once per cell
-#[derive(Clone, Copy, Default, PartialEq)]
+#[derive(Clone, Copy, PartialEq)]
 pub struct Cell {
     pub style: Style,
     pub char: char,
+}
+
+impl Default for Cell {
+    fn default() -> Self {
+        Cell { style: Style::default(), char: ' ' }
+    }
+    
 }
 
