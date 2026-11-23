@@ -16,7 +16,7 @@ pub struct Screen {
     pub rows: usize,
     /// Total Columns in terminal window
     pub columns: usize,
-    /// Track each pane added to the screen 
+    /// Track each pane added to the screen
     pub panes: Vec<Box<dyn pane::Pane>>,
 }
 
@@ -28,7 +28,7 @@ impl Screen {
     /// to handle clearing previous screen before switching
     pub fn new() -> io::Result<Self> {
         let mut screen = Self::default();
-        screen.get_screen_size()?;
+        screen.read_terminal_size()?;
         Ok(screen)
     }
 
@@ -42,38 +42,38 @@ impl Screen {
     /// [`Screen::pane`] hands back that same type
     pub fn add_pane<P: pane::Pane>(&mut self, pane: P) -> pane::PaneId<P> {
         self.panes.push(Box::new(pane));
-        pane::PaneId { 
-            index: self.panes.len()-1, 
-            _type: PhantomData 
+        pane::PaneId {
+            index: self.panes.len() - 1,
+            _type: PhantomData,
         }
     }
 
     /// Generic access to any pane type stored in screen
     ///
     /// Reads the ID to match the box containing the pane and
-    /// extracts a mut reference to it, casting to the typed stored 
+    /// extracts a mut reference to it, casting to the typed stored
     /// in the [`PaneId`](crate::PaneId)
     pub fn pane<P: pane::Pane>(&mut self, id: pane::PaneId<P>) -> &mut P {
         /* Use slot ID to get Box of pane */
         let boxed: &mut Box<dyn pane::Pane> = &mut self.panes[id.index];
 
         /* Unbox inner for `trait Pane` (Still not struct type) */
-        let some_pane: &mut dyn pane::Pane = boxed.as_mut();    
-        
+        let some_pane: &mut dyn pane::Pane = boxed.as_mut();
+
         /* Widen to a `dyn Any` for downcast */
         let any: &mut dyn std::any::Any = some_pane;
-        
+
         /* Checks type in box matches type 'P', then casts to type */
         any.downcast_mut::<P>().unwrap()
     }
-    
+
     /// Renders all [`Screen::pane`] inside screen to the terminal
     /// In order of Pane added to screen
     pub fn draw(&mut self) -> io::Result<()> {
         for pane in &mut self.panes {
             let grid = pane.frame();
-            let grid_string = grid.build_output_string();
-            
+            let grid_string = grid.render_changes();
+
             /* Print grid to pane & return cursor back to original position */
             let mut out = io::stdout().lock();
             write!(out, "\x1b7{}\x1b8", grid_string)?;
@@ -87,7 +87,7 @@ impl Screen {
     /// Also turns off autowrap, so writing the bottom-right cell cannot scroll
     /// the screen. Call [`Screen::teardown`] before exiting to give the user
     /// back their normal screen
-    pub fn setup_screen(&self) -> io::Result<()> {
+    pub fn setup(&self) -> io::Result<()> {
         let mut out = io::stdout().lock();
         // alternate screen, clear, scroll region = rows 1..h-1
         write!(out, "\x1b[?1049h\x1b[2J")?;
@@ -105,7 +105,6 @@ impl Screen {
         out.flush()
     }
 
-
     /**********************************************************
      *                       Private                          *
      **********************************************************/
@@ -116,7 +115,7 @@ impl Screen {
     ///
     /// # Panics
     /// Panics if `tput` cannot be run
-    fn get_screen_size(&mut self) -> io::Result<()> {
+    fn read_terminal_size(&mut self) -> io::Result<()> {
         let tput_cmd = Command::new("tput")
             .arg("lines")
             .arg("cols")
@@ -143,8 +142,6 @@ impl Screen {
 
     fn helper_print_screen_dims(&self) {
         println!("\n--- Main Screen ---");
-        println!("Width:{} Height:{}",self.columns, self.rows);
+        println!("Width:{} Height:{}", self.columns, self.rows);
     }
 }
-
-

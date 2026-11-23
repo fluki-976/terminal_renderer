@@ -1,9 +1,9 @@
-  mod cell;
-  mod pane;
-  mod grid;
-  mod screen;
+mod cell;
+mod grid;
+mod pane;
+mod screen;
 
-  pub use cell::{Cell, Color, Style};
-  pub use pane::{LogPane, PaneId, Pane};
-  pub use screen::Screen;
-  pub use grid::Grid;
+pub use cell::{Cell, Color, Style};
+pub use grid::Grid;
+pub use pane::{LogPane, Pane, PaneId};
+pub use screen::Screen;

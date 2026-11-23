@@ -7,7 +7,7 @@ project, and as a way to learn Rust and test-driven development
 
 ## What it can do
 
-- **Alternate screen:** `Screen::setup_screen` switches to the alternate
+- **Alternate screen:** `Screen::setup` switches to the alternate
   screen and turns off autowrap. `Screen::teardown` gives the user back their
   normal screen
 - **Terminal size:** read from `tput` when the `Screen` is created
@@ -31,7 +31,7 @@ project, and as a way to learn Rust and test-driven development
 use terminal_renderer as tr;
 
 let mut display = tr::Screen::new()?;
-display.setup_screen()?;
+display.setup()?;
 
 let log = display.add_pane(tr::LogPane::new(0, 0, display.columns, display.rows - 1)?);
 display.pane(log).push_line("Hello");
@@ -94,7 +94,7 @@ cargo test
 - [ ] Optional pane borders, drawn with Unicode box characters (`┌─┐│└┘`)
   - [x] `Grid::set_border(enable)` draws or blanks the ring in the outer
         cells
-  - [x] `get_grid_size` and `write_cells` work on the inside only, so
+  - [x] `inner_size` and `write_row` work on the inside only, so
         panes need no changes
   - [x] `clear` keeps the border
   - [x] `LogPane::set_border` keeps the scroll limit to the rows inside

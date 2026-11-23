@@ -10,7 +10,6 @@ use crate::Grid;
 mod history;
 pub use history::LogPane;
 
-
 /*****************************************************************************/
 /*                                 PaneId                                    */
 /*****************************************************************************/
@@ -22,8 +21,8 @@ pub use history::LogPane;
 pub struct PaneId<P> {
     /// Position of the pane in [`Screen::panes`](crate::Screen::panes)
     pub index: usize,
-    /// Records the pane's type `P` for the compiler. Zero-sized: Lets 
-    /// `Screen::pane` return a `P`, and stops a `PaneId<Grid>` from 
+    /// Records the pane's type `P` for the compiler. Zero-sized: Lets
+    /// `Screen::pane` return a `P`, and stops a `PaneId<Grid>` from
     /// being used to fetch a `LogPane`
     pub _type: PhantomData<P>,
 }
@@ -48,5 +47,4 @@ pub trait Pane: Any {
     /// that keeps its content elsewhere, such as [`LogPane`], copies it into
     /// its grid here before returning it.
     fn frame(&mut self) -> &mut Grid;
-
 }

@@ -33,25 +33,25 @@ impl LogPane {
     /// The scroll limit follows the rows left inside the border
     pub fn set_border(&mut self, enable: bool) -> io::Result<()> {
         self.grid.set_border(enable)?;
-        self.log.set_view_height(self.grid.get_grid_size().0);
+        self.log.set_view_height(self.grid.inner_size().0);
         Ok(())
     }
 
-    /// Moves the view `scroll_n_lines` towards older lines
+    /// Moves the view `lines` towards older lines
     ///
     /// Stops once the oldest line is on the top row. While scrolled, the
     /// view stays on the same lines as new ones are pushed
-    pub fn scroll_up(&mut self, scroll_n_lines: usize) {
+    pub fn scroll_up(&mut self, lines: usize) {
         self.log
-            .set_scroll_offset(self.log.scroll.saturating_add(scroll_n_lines));
+            .set_scroll_offset(self.log.scroll_offset.saturating_add(lines));
     }
 
-    /// Moves the view `scroll_n_lines` towards newer lines
+    /// Moves the view `lines` towards newer lines
     ///
     /// Stops at the newest line, where the view follows new lines again
-    pub fn scroll_down(&mut self, scroll_n_lines: usize) {
+    pub fn scroll_down(&mut self, lines: usize) {
         self.log
-            .set_scroll_offset(self.log.scroll.saturating_sub(scroll_n_lines));
+            .set_scroll_offset(self.log.scroll_offset.saturating_sub(lines));
     }
 }
 
@@ -61,7 +61,7 @@ impl Pane for LogPane {
     /// Shows the `height` lines that end `scroll` lines back from the newest.
     /// Lines wider than the grid are cut off, not wrapped
     fn frame(&mut self) -> &mut Grid {
-        let (height, _) = self.grid.get_grid_size();
+        let (height, _) = self.grid.inner_size();
 
         self.grid.clear();
 
@@ -71,10 +71,10 @@ impl Pane for LogPane {
             .lines
             .iter()
             .rev()
-            .skip(self.log.scroll)
+            .skip(self.log.scroll_offset)
             .take(height);
         for (row, line) in visible.enumerate() {
-            self.grid.write_cells(line, height - 1 - row, 0);
+            self.grid.write_row(line, height - 1 - row, 0);
         }
         &mut self.grid
     }
@@ -95,7 +95,7 @@ pub(crate) struct LogHistory {
     max_line_len: usize,
     /// How many lines back from the newest the view ends. 0 follows new
     /// output
-    scroll: usize,
+    scroll_offset: usize,
 }
 
 impl LogHistory {
@@ -108,7 +108,7 @@ impl LogHistory {
             view_height: height,
             max_lines: 1000,
             max_line_len: 1500,
-            scroll: 0,
+            scroll_offset: 0,
         }
     }
 
@@ -153,8 +153,8 @@ impl LogHistory {
         self.trim_line_history();
 
         /* Don`t shift text on screen if at scroll offset */
-        if self.scroll > 0 {
-            self.set_scroll_offset(self.scroll + 1);
+        if self.scroll_offset > 0 {
+            self.set_scroll_offset(self.scroll_offset + 1);
         }
     }
 
@@ -170,13 +170,13 @@ impl LogHistory {
     /// limit when the view grows
     fn set_view_height(&mut self, view_height: usize) {
         self.view_height = view_height;
-        self.set_scroll_offset(self.scroll);
+        self.set_scroll_offset(self.scroll_offset);
     }
 
     /// Sets how many lines back from the newest the view ends, limited to
     /// [`max_scroll`](Self::max_scroll)
     fn set_scroll_offset(&mut self, scroll_offset: usize) {
-        self.scroll = scroll_offset.min(self.max_scroll());
+        self.scroll_offset = scroll_offset.min(self.max_scroll());
     }
 
     /// Furthest scroll that still fills the view: `view_height` lines short
@@ -373,7 +373,7 @@ mod tests {
         fn new_log_is_empty_and_unscrolled() {
             let log = LogHistory::new(5);
             assert!(log.lines.is_empty());
-            assert_eq!(log.scroll, 0);
+            assert_eq!(log.scroll_offset, 0);
         }
 
         mod push_line {
@@ -451,7 +451,7 @@ mod tests {
             fn unscrolled_view_keeps_following_newest() {
                 let mut log = log_with_lines(3);
                 log.new_line();
-                assert_eq!(log.scroll, 0);
+                assert_eq!(log.scroll_offset, 0);
             }
 
             #[test]
@@ -459,7 +459,7 @@ mod tests {
                 let mut log = log_with_lines(10);
                 log.set_scroll_offset(3);
                 log.new_line();
-                assert_eq!(log.scroll, 4);
+                assert_eq!(log.scroll_offset, 4);
             }
 
             #[test]
@@ -467,7 +467,7 @@ mod tests {
                 let mut log = log_with_lines(LogHistory::new(NO_VIEW_LIMIT).max_lines);
                 log.set_scroll_offset(3);
                 log.new_line();
-                assert_eq!(log.scroll, 4);
+                assert_eq!(log.scroll_offset, 4);
             }
 
             #[test]
@@ -475,7 +475,7 @@ mod tests {
                 let mut log = log_with_lines(LogHistory::new(NO_VIEW_LIMIT).max_lines);
                 log.set_scroll_offset(log.max_lines);
                 log.new_line();
-                assert_eq!(log.scroll, log.max_lines);
+                assert_eq!(log.scroll_offset, log.max_lines);
             }
         }
 
@@ -504,7 +504,7 @@ mod tests {
 
                 log.trim_line_history();
 
-                assert_eq!(log.scroll, 3);
+                assert_eq!(log.scroll_offset, 3);
             }
 
             #[test]
@@ -531,7 +531,7 @@ mod tests {
                 log.set_view_height(8);
 
                 /* 10 lines with 8 on screen leaves only 2 to scroll back through */
-                assert_eq!(log.scroll, 2);
+                assert_eq!(log.scroll_offset, 2);
             }
         }
 
@@ -542,7 +542,7 @@ mod tests {
             fn setting_scroll_offset() {
                 let mut log = log_with_lines(50);
                 log.set_scroll_offset(5);
-                assert_eq!(log.scroll, 5);
+                assert_eq!(log.scroll_offset, 5);
             }
 
             #[test]
@@ -550,21 +550,21 @@ mod tests {
                 let num_of_lines: usize = 50;
                 let mut log = log_with_lines(num_of_lines);
                 log.set_scroll_offset(num_of_lines + 1);
-                assert_eq!(log.scroll, num_of_lines);
+                assert_eq!(log.scroll_offset, num_of_lines);
             }
 
             #[test]
             fn stop_scroll_past_max_lines() {
                 let mut log = log_with_lines(LogHistory::new(NO_VIEW_LIMIT).max_lines);
                 log.set_scroll_offset(log.max_lines + 5);
-                assert_eq!(log.scroll, log.max_lines);
+                assert_eq!(log.scroll_offset, log.max_lines);
             }
 
             #[test]
             fn stop_scroll_on_empty_log() {
                 let mut log = LogHistory::new(NO_VIEW_LIMIT);
                 log.set_scroll_offset(1);
-                assert_eq!(log.scroll, 0);
+                assert_eq!(log.scroll_offset, 0);
             }
         }
 

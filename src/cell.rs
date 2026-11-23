@@ -20,7 +20,7 @@ pub struct Style {
     mods: u8,
 }
 
-/// One character position on screen: 
+/// One character position on screen:
 /// The character and the style it is drawn with
 ///
 /// When rendering, group neighbouring cells that share a style so each style
@@ -33,15 +33,22 @@ pub struct Cell {
 
 impl Default for Cell {
     fn default() -> Self {
-        Cell { style: Style::default(), char: ' ' }
+        Cell {
+            style: Style::default(),
+            char: ' ',
+        }
     }
-
 }
 
 /// Cells for `text` in the default style, for building lines in tests
 #[cfg(test)]
 pub(crate) fn cells_from(text: &str) -> Vec<Cell> {
-    text.chars().map(|char| Cell { char, ..Default::default() }).collect()
+    text.chars()
+        .map(|char| Cell {
+            char,
+            ..Default::default()
+        })
+        .collect()
 }
 
 #[cfg(test)]
@@ -50,19 +57,48 @@ mod tests {
 
     #[test]
     fn cells_from_string() {
-
         let cells = cells_from(&"New String");
         let expected = vec![
-            Cell {char: 'N', style: Style::default()},
-            Cell {char: 'e', style: Style::default()},
-            Cell {char: 'w', style: Style::default()},
-            Cell {char: ' ', style: Style::default()},
-            Cell {char: 'S', style: Style::default()},
-            Cell {char: 't', style: Style::default()},
-            Cell {char: 'r', style: Style::default()},
-            Cell {char: 'i', style: Style::default()},
-            Cell {char: 'n', style: Style::default()},
-            Cell {char: 'g', style: Style::default()},
+            Cell {
+                char: 'N',
+                style: Style::default(),
+            },
+            Cell {
+                char: 'e',
+                style: Style::default(),
+            },
+            Cell {
+                char: 'w',
+                style: Style::default(),
+            },
+            Cell {
+                char: ' ',
+                style: Style::default(),
+            },
+            Cell {
+                char: 'S',
+                style: Style::default(),
+            },
+            Cell {
+                char: 't',
+                style: Style::default(),
+            },
+            Cell {
+                char: 'r',
+                style: Style::default(),
+            },
+            Cell {
+                char: 'i',
+                style: Style::default(),
+            },
+            Cell {
+                char: 'n',
+                style: Style::default(),
+            },
+            Cell {
+                char: 'g',
+                style: Style::default(),
+            },
         ];
         assert!(cells == expected);
     }
