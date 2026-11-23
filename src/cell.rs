@@ -44,3 +44,26 @@ pub(crate) fn cells_from(text: &str) -> Vec<Cell> {
     text.chars().map(|char| Cell { char, ..Default::default() }).collect()
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn cells_from_string() {
+
+        let cells = cells_from(&"New String");
+        let expected = vec![
+            Cell {char: 'N', style: Style::default()},
+            Cell {char: 'e', style: Style::default()},
+            Cell {char: 'w', style: Style::default()},
+            Cell {char: ' ', style: Style::default()},
+            Cell {char: 'S', style: Style::default()},
+            Cell {char: 't', style: Style::default()},
+            Cell {char: 'r', style: Style::default()},
+            Cell {char: 'i', style: Style::default()},
+            Cell {char: 'n', style: Style::default()},
+            Cell {char: 'g', style: Style::default()},
+        ];
+        assert!(cells == expected);
+    }
+}
