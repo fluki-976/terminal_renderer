@@ -8,15 +8,6 @@ use std::{
 use super::Pane;
 use crate::cell;
 
-/*
- * Top Left	    ┌  '\u{250C}'
- * Top right    ┐  '\u{2510}'
- * Bottom left  └  '\u{2514}'
- * Bottom right	┘  '\u{2518}'
- * Horizontal   ─  '\u{2500}'
- * Vertical     │  '\u{2502}'
- */
-
 /// Characters that make up a border
 #[derive(Clone, Copy)]
 struct BorderChars {
@@ -31,12 +22,12 @@ struct BorderChars {
 impl BorderChars {
     /// Single line box drawing
     const SINGLE: Self = Self {
-        top_left: '┌',
-        top_right: '┐',
-        bottom_left: '└',
-        bottom_right: '┘',
-        horizontal: '─',
-        vertical: '│',
+        top_left: '┌',      //'\u{250C}'
+        top_right: '┐',     //'\u{2510}'
+        bottom_left: '└',   //'\u{2514}'
+        bottom_right: '┘',  //'\u{2518}'
+        horizontal: '─',    //'\u{2500}'
+        vertical: '│',      //'\u{2502}'
     };
 
     /// Blank cells, matching `Cell::default`, used to remove a border
@@ -320,80 +311,88 @@ impl Grid {
 mod tests {
     use super::*;
 
-    #[test]
-    fn no_border_on_small_grid() {
-        let mut grid = Grid::new(0, 0, 10, 2).unwrap();
-        let result = grid.set_border(true);
-        assert!(result.is_err(), "{result:?}");
+    mod set_border {
+        use super::*; 
+
+        #[test]
+        fn no_border_on_small_grid() {
+            let mut grid = Grid::new(0, 0, 10, 2).unwrap();
+            let result = grid.set_border(true);
+            assert!(result.is_err(), "{result:?}");
+        }
+
+        #[test]
+        fn only_enable_boarder_once() {
+            let mut grid = Grid::new(0, 0, 10, 6).unwrap();
+            let result_a = grid.set_border(true);
+            let result_b = grid.set_border(true);
+
+            /* Second enable does nothing */
+            assert!(result_a.is_ok(), "{result_a:?}");
+            assert!(result_b.is_ok(), "{result_b:?}");
+            assert!(grid.border_enabled());
+        }
     }
 
-    #[test]
-    fn only_enable_boarder_once() {
-        let mut grid = Grid::new(0, 0, 10, 6).unwrap();
-        let result_a = grid.set_border(true);
-        let result_b = grid.set_border(true);
+    mod draw_border {
+        use super::*; 
 
-        /* Second enable does nothing */
-        assert!(result_a.is_ok(), "{result_a:?}");
-        assert!(result_b.is_ok(), "{result_b:?}");
-        assert!(grid.border_enabled());
-    }
+        fn grid_with_border(x: usize, y: usize, width: usize, height: usize) -> Grid {
+            let mut grid = Grid::new(x, y, width, height).unwrap();
+            let result = grid.set_border(true);
+            assert!(result.is_ok(), "{result:?}");
+            grid
+        }
 
-    fn grid_with_border(x: usize, y: usize, width: usize, height: usize) -> Grid {
-        let mut grid = Grid::new(x, y, width, height).unwrap();
-        let result = grid.set_border(true);
-        assert!(result.is_ok(), "{result:?}");
-        grid
-    }
+        #[test]
+        fn border_drawn_in_outer_grid_cells() {
+            let mut grid = grid_with_border(0, 0, 10, 6);
+            grid.draw_border(grid.border.chars);
+            let rows: Vec<String> = (0..6).map(|i| grid.row_text(i)).collect();
+            assert_eq!(rows[0], "┌────────┐");
+            assert_eq!(rows[1], "│        │");
+            assert_eq!(rows[2], "│        │");
+            assert_eq!(rows[3], "│        │");
+            assert_eq!(rows[4], "│        │");
+            assert_eq!(rows[5], "└────────┘");
+        }
 
-    #[test]
-    fn border_drawn_in_outer_grid_cells() {
-        let mut grid = grid_with_border(0, 0, 10, 6);
-        grid.draw_border(grid.border.chars);
-        let rows: Vec<String> = (0..6).map(|i| grid.row_text(i)).collect();
-        assert_eq!(rows[0], "┌────────┐");
-        assert_eq!(rows[1], "│        │");
-        assert_eq!(rows[2], "│        │");
-        assert_eq!(rows[3], "│        │");
-        assert_eq!(rows[4], "│        │");
-        assert_eq!(rows[5], "└────────┘");
-    }
+        #[test]
+        fn border_cleared_when_unset() {
+            let mut grid = grid_with_border(0, 0, 10, 6);
+            let result = grid.set_border(false);
+            assert!(result.is_ok(), "{result:?}");
 
-    #[test]
-    fn border_cleared_when_unset() {
-        let mut grid = grid_with_border(0, 0, 10, 6);
-        let result = grid.set_border(false);
-        assert!(result.is_ok(), "{result:?}");
+            let rows: Vec<String> = (0..6).map(|i| grid.row_text(i)).collect();
+            assert_eq!(rows, ["", "", "", "", "", ""]);
+        }
 
-        let rows: Vec<String> = (0..6).map(|i| grid.row_text(i)).collect();
-        assert_eq!(rows, ["", "", "", "", "", ""]);
-    }
+        #[test]
+        fn first_row_with_border_hits_inside_border() {
+            let mut grid = grid_with_border(0, 0, 10, 6);
+            grid.write_cells(&cell::cells_from("Hello"), 0, 0);
+            grid.draw_border(grid.border.chars);
+            let rows: Vec<String> = (0..6).map(|i| grid.row_text(i)).collect();
+            assert_eq!(rows[0], "┌────────┐");
+            assert_eq!(rows[1], "│Hello   │");
+            assert_eq!(rows[2], "│        │");
+            assert_eq!(rows[3], "│        │");
+            assert_eq!(rows[4], "│        │");
+            assert_eq!(rows[5], "└────────┘");
+        }
 
-    #[test]
-    fn first_row_with_border_hits_inside_border() {
-        let mut grid = grid_with_border(0, 0, 10, 6);
-        grid.write_cells(&cell::cells_from("Hello"), 0, 0);
-        grid.draw_border(grid.border.chars);
-        let rows: Vec<String> = (0..6).map(|i| grid.row_text(i)).collect();
-        assert_eq!(rows[0], "┌────────┐");
-        assert_eq!(rows[1], "│Hello   │");
-        assert_eq!(rows[2], "│        │");
-        assert_eq!(rows[3], "│        │");
-        assert_eq!(rows[4], "│        │");
-        assert_eq!(rows[5], "└────────┘");
-    }
-
-    #[test]
-    fn border_remains_after_clear() {
-        let mut grid = grid_with_border(0, 0, 10, 6);
-        grid.draw_border(grid.border.chars);
-        grid.clear();
-        let rows: Vec<String> = (0..6).map(|i| grid.row_text(i)).collect();
-        assert_eq!(rows[0], "┌────────┐");
-        assert_eq!(rows[1], "│        │");
-        assert_eq!(rows[2], "│        │");
-        assert_eq!(rows[3], "│        │");
-        assert_eq!(rows[4], "│        │");
-        assert_eq!(rows[5], "└────────┘");
+        #[test]
+        fn border_remains_after_clear() {
+            let mut grid = grid_with_border(0, 0, 10, 6);
+            grid.draw_border(grid.border.chars);
+            grid.clear();
+            let rows: Vec<String> = (0..6).map(|i| grid.row_text(i)).collect();
+            assert_eq!(rows[0], "┌────────┐");
+            assert_eq!(rows[1], "│        │");
+            assert_eq!(rows[2], "│        │");
+            assert_eq!(rows[3], "│        │");
+            assert_eq!(rows[4], "│        │");
+            assert_eq!(rows[5], "└────────┘");
+        }
     }
 }

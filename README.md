@@ -92,9 +92,14 @@ cargo test
       style into one escape sequence
 - [ ] Redraw on terminal resize
 - [ ] Optional pane borders, drawn with Unicode box characters (`┌─┐│└┘`)
-  - [x] `Grid::set_border(enable)`: the grid keeps its outer size but
-        `get_grid_size`, `write_cells` and `clear` work on the inside only,
-        so panes need no changes
+  - [x] `Grid::set_border(enable)` draws or blanks the ring in the outer
+        cells
+  - [x] `get_grid_size` and `write_cells` work on the inside only, so
+        panes need no changes
+  - [x] `clear` keeps the border
+  - [x] `LogPane::set_border` keeps the scroll limit to the rows inside
+  - [ ] Settable border characters (`draw_border` takes them, no public
+        setter yet)
   - [ ] Optional title in the top edge of the border
   - [ ] Settable border colour
   - [ ] Show focus on the border (double line `╔═╗║` or a focus colour)
