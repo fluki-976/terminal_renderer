@@ -105,8 +105,9 @@ cargo test
   - [ ] Show focus on the border (double line `╔═╗║` or a focus colour)
 
 **Input**
-- [ ] Stop the terminal echoing typed text onto the screen: raw mode in
+- [x] Stop the terminal echoing typed text onto the screen: raw mode in
       `Screen` (echo and line buffering off), restored on exit and on panic
+      NOTE: only echo handled, not true raw mode 
 - [ ] Input pane with focus, so the user can type into it as if it were
       the terminal. With more than one input pane, the main program needs
       telling which one has new input to read
@@ -118,7 +119,7 @@ cargo test
 - [ ] Decide how errors are reported (`push_line` still uses `unwrap`)
 
 **Tidy**
-- [ ] Remove the deprecated `std::usize` import in `pane.rs` and `grid.rs`
+- [x] Remove the deprecated `std::usize` import in `pane.rs` and `grid.rs`
 - [x] Fill the empty test module in `grid.rs`
 - [ ] Remove the unused `helper_print_screen_dims` in `screen.rs`
 - [x] Decide whether `LogHistory` needs to be public: crate-private
