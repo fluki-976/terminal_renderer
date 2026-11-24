@@ -1,10 +1,12 @@
 #[rustfmt::skip]
 use std::{
-    io::{self, Write, Error, ErrorKind}, 
+    io::{self, Write, Error, ErrorKind},
     process::{Command, Stdio}, 
     marker::PhantomData,
+    os::fd::AsRawFd,
 };
 
+use crate::no_echo::NoEcho;
 use crate::pane;
 
 /*****************************************************************************/
@@ -18,6 +20,8 @@ pub struct Screen {
     pub columns: usize,
     /// Track each pane added to the screen
     pub panes: Vec<Box<dyn pane::Pane>>,
+    /// Echo stays off while this is held, set by [`Screen::setup`]
+    no_echo: Option<NoEcho>,
 }
 
 impl Screen {
@@ -85,9 +89,14 @@ impl Screen {
     /// Switches to the alternate screen and clears it
     ///
     /// Also turns off autowrap, so writing the bottom-right cell cannot scroll
-    /// the screen. Call [`Screen::teardown`] before exiting to give the user
-    /// back their normal screen
-    pub fn setup(&self) -> io::Result<()> {
+    /// the screen, and stops typed keys echoing. Call [`Screen::teardown`]
+    /// before exiting to give the user back their normal screen
+    ///
+    /// # Errors
+    /// Returns an error if stdin is not a terminal
+    pub fn setup(&mut self) -> io::Result<()> {
+        self.no_echo = Some(NoEcho::enable(io::stdin().as_raw_fd())?);
+
         let mut out = io::stdout().lock();
         // alternate screen, clear, scroll region = rows 1..h-1
         write!(out, "\x1b[?1049h\x1b[2J")?;
@@ -98,8 +107,10 @@ impl Screen {
         out.flush()
     }
 
-    /// Resets the scroll region and returns to the user's normal screen.
-    pub fn teardown(&self) -> io::Result<()> {
+    /// Resets the scroll region, turns echo back on and returns to the user's
+    /// normal screen
+    pub fn teardown(&mut self) -> io::Result<()> {
+        self.no_echo = None; // Drop restores the saved terminal settings
         let mut out = io::stdout().lock();
         write!(out, "\x1b[r\x1b[?7h\x1b[?1049l")?;
         out.flush()
@@ -143,5 +154,14 @@ impl Screen {
     fn helper_print_screen_dims(&self) {
         println!("\n--- Main Screen ---");
         println!("Width:{} Height:{}", self.columns, self.rows);
+    }
+}
+
+impl Drop for Screen {
+    /* Return screen to user on early exit */
+    fn drop(&mut self) {
+        if self.no_echo.is_some() {
+            let _ = self.teardown();
+        }
     }
 }

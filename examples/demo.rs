@@ -21,16 +21,32 @@ use std::{
     io,
     thread, 
     time, 
+    sync::atomic::{AtomicBool, Ordering},
+    sync::Arc,
 };
 
 use terminal_renderer as tr;
 
 fn main() -> io::Result<()> {
+    /* 
+     * Sig handler 
+     * On Ctrl+C screen closes without running teardown
+     * causing the screen to freeze inside the alternate
+     * screen, even after killing the process
+     */
+    let running = Arc::new(AtomicBool::new(true));
+    let r = running.clone();
+    ctrlc::set_handler(move || {
+        r.store(false, Ordering::SeqCst);
+    }).expect("Error setting Ctrl-C handler");
+
     /* Create and initialize new screen */
     let mut display = match tr::Screen::new() {
         Ok(disp) => disp,
         Err(e) => return Err(e),
     };
+
+    /* Initialize the terminal */
     display.setup()?;
 
     /* Create panes to create seperate sections on the screen to draw on */
@@ -51,6 +67,7 @@ fn main() -> io::Result<()> {
 
     /* Simulating Rolling log for scroll tests */
     for i in 101..200 {
+        if !running.load(Ordering::SeqCst) { break; }
         display.pane(log_pane).push_line(&format!("Line: {}", i));
         thread::sleep(time::Duration::from_secs(1));
         display.draw()?;

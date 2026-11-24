@@ -2,7 +2,6 @@ use std::io::{Error, ErrorKind};
 #[rustfmt::skip]
 use std::{
     io::{self}, 
-    usize,
 };
 
 use super::Pane;
