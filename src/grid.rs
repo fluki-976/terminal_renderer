@@ -8,6 +8,8 @@ use std::{
 use super::Pane;
 use crate::cell;
 
+const MINIMUM_GRID_DIMENSION_WITH_BORDER: usize = 2;
+
 /// Characters that make up a border
 #[derive(Clone, Copy)]
 struct BorderChars {
@@ -135,7 +137,10 @@ impl Grid {
         }
 
         /* A border needs at least one cell inside it */
-        if enable && (self.width < 3 || self.height < 3) {
+        if enable
+            && (self.width <= MINIMUM_GRID_DIMENSION_WITH_BORDER
+                || self.height <= MINIMUM_GRID_DIMENSION_WITH_BORDER)
+        {
             return Err(Error::new(
                 ErrorKind::InvalidInput,
                 "Grid must be atlest 3x3 to have a border",
@@ -310,7 +315,7 @@ mod tests {
 
         #[test]
         fn no_border_on_small_grid() {
-            let mut grid = Grid::new(0, 0, 10, 2).unwrap();
+            let mut grid = Grid::new(0, 0, 10, MINIMUM_GRID_DIMENSION_WITH_BORDER).unwrap();
             let result = grid.set_border(true);
             assert!(result.is_err(), "{result:?}");
         }
